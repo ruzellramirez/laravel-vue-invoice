@@ -4,82 +4,85 @@ import { useRouter } from "vue-router";
 
 const router = useRouter();
 
-let form = ref([]);
+let form = ref({ id: "" });
 let allcustomers = ref([]);
 let customer_id = ref([]);
-let item = ref([]);
-let listCart = ref([]);
 const showModal = ref(false);
 let listproducts = ref([]);
 
 onMounted(async () => {
-  indexForm();
+  getInvoice();
   getAllCustomers();
   getProducts();
 });
 
-// gets a blank invoice then saves to form state
-const indexForm = async () => {
-  let response = await axios.get("/api/create_invoice");
-  form.value = response.data;
+const props = defineProps({
+  id: { type: String, default: "" },
+});
+
+const getInvoice = async () => {
+  let response = await axios.get(`/api/edit_invoice/${props.id}`);
+  form.value = response.data.invoice;
 };
 
-// gets all customers to choose from in card header then saves to allcustomers state
 const getAllCustomers = async () => {
   let response = await axios.get("/api/customers");
   allcustomers.value = response.data.customers;
 };
 
-// adds item to cart then pushes to listCart state array
-const addCart = (item) => {
-  const itemcart = {
-    id: item.id,
-    item_code: item.item_code,
-    description: item.description,
-    unit_price: item.unit_price,
-    quantity: 1,
-  };
-  listCart.value.push(itemcart);
-  toggleModal();
+const deleteInvoiceItem = (id, i) => {
+  form.value.invoice_items.splice(i, 1);
+  if (id != undefined) {
+    axios.delete("api/delete_invoice_item/" + id);
+  }
 };
 
-// gets all exisiting products to choose from then saves to listproducts state
 const getProducts = async () => {
   let response = await axios.get("/api/products");
   listproducts.value = response.data.products;
-};
-
-const removeItem = (i) => {
-  listCart.value.splice(i, 1);
 };
 
 const toggleModal = () => {
   showModal.value = !showModal.value;
 };
 
+const addCart = (item) => {
+  const itemcart = {
+    product_id: item.id,
+    item_code: item.item_code,
+    description: item.description,
+    unit_price: item.unit_price,
+    quantity: 1,
+  };
+  //   listCart.value.push(itemcart);
+  form.value.invoice_items.push(itemcart);
+  toggleModal();
+};
+
 const subTotal = () => {
   let total = 0;
-  listCart.value.map((data) => {
-    total = total + data.quantity * data.unit_price;
-  });
+  if (form.value.invoice_items) {
+    form.value.invoice_items.map((data) => {
+      total = total + data.quantity * data.unit_price;
+    });
+  }
   return total;
 };
 
 const total = () => {
-  return subTotal() - form.value.discount;
+  if (form.value.invoice_items) return subTotal() - form.value.discount;
 };
 
-const onSave = () => {
-  // check if there's at least 1 product on cart
-  if (listCart.value.length >= 1) {
+const onEdit = (id) => {
+  if (form.value.invoice_items.length >= 1) {
     let subtotal_price = 0;
     subtotal_price = subTotal();
     let total_price = 0;
     total_price = total();
 
     const formData = new FormData();
-    formData.append("invoice_item", JSON.stringify(listCart.value));
-    formData.append("customer_id", customer_id.value);
+    formData.append("invoice_item", JSON.stringify(form.value.invoice_items));
+    formData.append("customer_id", form.value.customer_id);
     formData.append("date", form.value.date);
     formData.append("due_date", form.value.due_date);
     formData.append("number", form.value.number);
@@ -89,9 +92,8 @@ const onSave = () => {
     formData.append("total", total_price);
     formData.append("terms_and_conditions", form.value.terms_and_conditions);
 
-    axios.post("/api/add_invoice", formData);
-    listCart.value = [];
-    form.value.discount = 0;
+    axios.post(`/api/update_invoice/${form.value.id}`, formData);
+    form.value.invoice_items = [];
     router.push("/");
   }
 };
@@ -102,18 +104,16 @@ const onSave = () => {
     <div class="invoices">
       <div class="card__header">
         <div>
-          <h2 class="invoice__title">New Invoice</h2>
+          <h2 class="invoice__title">Edit Invoice</h2>
         </div>
         <div></div>
       </div>
 
       <div class="card__content">
         <div class="card__content--header">
-          <!-- contains customer name, date, due date, number, and reference -->
           <div>
             <p class="my-1">Customer</p>
-            <!-- gets customer.id from selected customer then saves to customer_id state -->
-            <select name="" id="" class="input" v-model="customer_id">
+            <select name="" id="" class="input" v-model="form.customer_id">
               <option disabled>Select a customer</option>
               <option
                 v-for="customer in allcustomers"
@@ -149,7 +149,6 @@ const onSave = () => {
           </div>
         </div>
         <br /><br />
-
         <div class="table">
           <div class="table--heading2">
             <p>Item Description</p>
@@ -159,33 +158,31 @@ const onSave = () => {
             <p></p>
           </div>
 
-          <!-- items -->
-          <!-- row of items in cart from listCart state -->
+          <!-- item 1 -->
           <div
             class="table--items2"
-            v-for="(itemcart, i) in listCart"
+            v-for="(itemcart, i) in form.invoice_items"
             :key="itemcart.id"
           >
-            <p>#{{ itemcart.item_code }} {{ itemcart.description }}</p>
+            <p v-if="itemcart.product">
+              #{{ itemcart.product.item_code }}
+              {{ itemcart.product.description }}
+            </p>
+            <p v-else>#{{ itemcart.item_code }}{{ itemcart.description }}</p>
             <p>
               <input type="text" class="input" v-model="itemcart.unit_price" />
             </p>
             <p>
               <input type="text" class="input" v-model="itemcart.quantity" />
             </p>
-            <p v-if="itemcart.quantity">
-              ₱{{ itemcart.quantity * itemcart.unit_price }}
-            </p>
-            <p v-else></p>
+            <p>₱{{ itemcart.quantity * itemcart.unit_price }}</p>
             <p
               style="color: red; font-size: 24px; cursor: pointer"
-              @click="removeItem(i)"
+              @click="deleteInvoiceItem(itemcart.id, i)"
             >
               &times;
             </p>
           </div>
-
-          <!-- opens add product modal -->
           <div style="padding: 10px 30px !important">
             <button class="btn btn-sm btn__open--modal" @click="toggleModal()">
               Add New Line
@@ -206,7 +203,7 @@ const onSave = () => {
           <div>
             <div class="table__footer--subtotal">
               <p>Sub Total</p>
-              <span>₱ {{ subTotal() }}</span>
+              <span>₱{{ subTotal() }}</span>
             </div>
             <div class="table__footer--discount">
               <p>Discount</p>
@@ -214,7 +211,7 @@ const onSave = () => {
             </div>
             <div class="table__footer--total">
               <p>Grand Total</p>
-              <span>₱{{ total() }}</span>
+              <span>₱ {{ total() }}</span>
             </div>
           </div>
         </div>
@@ -222,23 +219,19 @@ const onSave = () => {
       <div class="card__header" style="margin-top: 40px">
         <div></div>
         <div>
-          <a class="btn btn-secondary" @click="onSave()"> Save </a>
+          <a class="btn btn-secondary" @click="onEdit(form.id)"> Save </a>
         </div>
       </div>
     </div>
   </div>
-  <!--==================== modal ====================-->
-
+  <!--==================== add modal items ====================-->
   <div class="modal main__modal" :class="{ show: showModal }">
     <div class="modal__content">
-      <span class="modal__close btn__close--modal" @click="toggleModal()"
-        >×</span
-      >
+      <span class="modal__close btn__close--modal" @click="toggleModal">×</span>
       <h3 class="modal__title">Add Item</h3>
       <hr />
       <br />
       <div class="modal__items">
-        <!-- list of available products from listproducts state -->
         <ul style="list-style: none">
           <li
             v-for="(item, i) in listproducts"
@@ -275,9 +268,7 @@ const onSave = () => {
         >
           Cancel
         </button>
-        <!-- <button class="btn btn-light btn__close--modal" @click="onSave()">
-          Save
-        </button> -->
+        <button class="btn btn-light btn__close--modal">Save</button>
       </div>
     </div>
   </div>

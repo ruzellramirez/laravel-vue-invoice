@@ -13,6 +13,10 @@ body {
 
 }
 
+button{
+    color:rgb(32, 32, 32) !important;
+}
+
 .container {
     width: 100%;
     max-width: 950px;

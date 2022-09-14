@@ -31,8 +31,11 @@ const search = async () => {
 
 const newInvoice = async () => {
   let form = await axios.get("/api/create_invoice");
-  console.log("form", form.data);
   router.push("/invoice/new");
+};
+
+const onShow = (id) => {
+  router.push("/invoice/show/" + id);
 };
 </script>
 
@@ -95,7 +98,12 @@ const newInvoice = async () => {
         </div>
         <div v-if="invoices.length > 0">
           <div class="table--items" v-for="item in invoices" :key="item.id">
-            <a href="#" class="table--items--transactionId">#{{ item.id }}</a>
+            <a
+              href="#"
+              class="table--items--transactionId"
+              @click="onShow(item.id)"
+              >#{{ item.id }}</a
+            >
             <p>{{ item.date }}</p>
             <p>{{ item.number }}</p>
             <p v-if="item.customer">{{ item.customer.firstname }}</p>
